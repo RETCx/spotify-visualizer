@@ -5,23 +5,14 @@ import { useState, useEffect } from "react";
 import { Music, RefreshCw, LogOut, Play } from "lucide-react";
 
 // ----- Types for Spotify API -----
-type SpotifyArtist = {
-  name: string;
-};
-
-type SpotifyAlbum = {
-  images: { url: string }[];
-  name: string;
-};
-
+type SpotifyArtist = { name: string };
+type SpotifyAlbum = { images: { url: string }[]; name: string };
 type SpotifyTrack = {
   name: string;
   artists: SpotifyArtist[];
   album: SpotifyAlbum;
-  duration_ms: number; // add this
+  duration_ms: number;
 };
-
-
 type SpotifyCurrentlyPlaying = {
   is_playing: boolean;
   progress_ms: number;
@@ -32,12 +23,50 @@ export default function Home() {
   const { data: session } = useSession();
   const [song, setSong] = useState<SpotifyCurrentlyPlaying | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dominantColor, setDominantColor] = useState('#8b5cf6');
+  const [accentColor, setAccentColor] = useState('#ec4899');
 
+  // ----- Format milliseconds to mm:ss -----
   const formatMsToMinutes = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  // ----- Extract colors from album image -----
+  const extractColors = (imageUrl: string) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous"; 
+    img.src = imageUrl;
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      let r = 0, g = 0, b = 0;
+      const pixelCount = data.length / 4;
+
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+      }
+
+      r = Math.min(255, Math.floor((r / pixelCount) * 1.3));
+      g = Math.min(255, Math.floor((g / pixelCount) * 1.3));
+      b = Math.min(255, Math.floor((b / pixelCount) * 1.3));
+
+      setDominantColor(`rgb(${r}, ${g}, ${b})`);
+      setAccentColor(`rgb(${Math.min(255, Math.floor((255 - r) * 0.7 + r * 0.3))}, ${Math.min(255, Math.floor((255 - g) * 0.7 + g * 0.3))}, ${Math.min(255, Math.floor((255 - b) * 0.7 + b * 0.3))})`);
+    };
   };
 
   // ----- Fetch currently playing song -----
@@ -46,14 +75,9 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const res = await fetch(
-        "https://api.spotify.com/v1/me/player/currently-playing",
-        {
-          headers: {
-            Authorization: `Bearer ${session.accessToken}`,
-          },
-        }
-      );
+      const res = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
 
       if (res.status === 204) {
         setSong(null);
@@ -78,12 +102,9 @@ export default function Home() {
     }
   };
 
+  // ----- Update song progress every second -----
   useEffect(() => {
-    getCurrentlyPlaying();
-  }, [session]);
-
-  useEffect(() => {
-    if (!song || !song.is_playing) return;
+    if (!song?.is_playing) return;
 
     const interval = setInterval(() => {
       setSong(prev => prev ? { ...prev, progress_ms: prev.progress_ms + 1000 } : prev);
@@ -92,35 +113,43 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [song]);
 
+  // ----- Auto-refresh every 15s for new songs -----
+  useEffect(() => {
+    getCurrentlyPlaying();
+    const interval = setInterval(getCurrentlyPlaying, 15000);
+    return () => clearInterval(interval);
+  }, [session]);
+
+  // ----- Extract colors whenever song image changes -----
+  useEffect(() => {
+    const imgUrl = song?.item?.album.images[0]?.url;
+    if (imgUrl) extractColors(imgUrl);
+  }, [song?.item?.album.images[0]?.url]);
+
   // ----- Login Screen -----
   if (!session) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-green-900 flex flex-col items-center justify-center p-4">
-        <div className="text-center space-y-8 animate-fade-in">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Music className="w-16 h-16 text-green-400" />
-          </div>
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-2">
-            Spotify Predictor
-          </h1>
-          <p className="text-gray-300 text-lg max-w-md mx-auto">
-            Connect your Spotify account to see what you're listening to in real-time
-          </p>
-          <button
-            onClick={() => signIn("spotify")}
-            className="bg-green-500 hover:bg-green-600 text-white font-semibold px-8 py-4 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
-          >
-            Login with Spotify
-          </button>
-        </div>
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-900 via-black to-green-900">
+        <Music className="w-16 h-16 text-green-400 mx-auto" />
+        <h1 className="text-5xl md:text-6xl font-bold text-white mt-4">Spotify Predictor</h1>
+        <p className="text-gray-300 text-lg mt-2 max-w-md text-center">
+          Connect your Spotify account to see what you're listening to in real-time
+        </p>
+        <button
+          onClick={() => signIn("spotify")}
+          className="mt-6 bg-green-500 hover:bg-green-600 text-white font-semibold px-8 py-4 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
+        >
+          Login with Spotify
+        </button>
       </main>
     );
   }
 
   // ----- Logged-in Screen -----
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
+    <main className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto space-y-6">
+
         {/* Header */}
         <div className="flex items-center justify-between bg-black/40 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3">
@@ -139,8 +168,11 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Now Playing Card */}
-        <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl">
+        {/* Now Playing */}
+        <div
+          className="bg-gradient-to-br backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl transition-all duration-1000"
+          style={{ background: `linear-gradient(135deg, ${dominantColor}, ${accentColor})` }}
+        >
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
               <Play className="w-6 h-6 text-green-400" />
@@ -156,48 +188,41 @@ export default function Home() {
             </button>
           </div>
 
-          {loading && !song ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400 mx-auto"></div>
-              <p className="text-gray-400 mt-4">Loading...</p>
-            </div>
-          ) : song?.is_playing && song.item ? (
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-                {/* Album Art */}
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-green-400 to-purple-500 rounded-2xl blur-xl opacity-50 group-hover:opacity-75 transition-opacity duration-300"></div>
-                  <img
-                    src={song.item.album.images[0]?.url}
-                    alt={song.item.album.name}
-                    className="relative w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-2xl object-cover"
-                  />
-                </div>
+          {song?.is_playing && song.item ? (
+            <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+              {/* Album Art */}
+              <div className="relative group">
+                <div
+                  className="absolute inset-0 rounded-2xl blur-xl opacity-50 transition-all duration-1000"
+                  style={{ background: `linear-gradient(135deg, ${dominantColor}, ${accentColor})` }}
+                ></div>
+                <img
+                  src={song.item.album.images[0]?.url}
+                  alt={song.item.album.name}
+                  className="relative w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-2xl object-cover"
+                />
+              </div>
 
-                {/* Track Info */}
-                <div className="flex-1 text-center md:text-left space-y-3">
-                  <h3 className="text-3xl md:text-4xl font-bold text-white leading-tight">
-                    {song.item.name}
-                  </h3>
-                  <p className="text-xl text-gray-300">
-                    {song.item.artists.map((artist: SpotifyArtist) => artist.name).join(", ")}
-                  </p>
-                  <p className="text-gray-400 text-sm">
-                    {song.item.album.name}
-                  </p>
-                  
-                  {/* Progress Indicator */}
-                  <div className="pt-4 space-y-2">
-                    <div className="flex justify-between text-sm text-gray-400">
-                      <span>{formatMsToMinutes(song.progress_ms)}</span>
-                      <span className="text-green-400 font-medium">● LIVE</span>
-                    </div>
-                    <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-green-400 to-green-500 h-full rounded-full transition-all duration-500 ease-linear"
-                        style={{ width: `${(song.progress_ms / song.item?.duration_ms!) * 100}%` }}
-                      ></div>
-                    </div>
+              {/* Track Info */}
+              <div className="flex-1 text-center md:text-left space-y-3">
+                <h3 className="text-3xl md:text-4xl font-bold text-white leading-tight">{song.item.name}</h3>
+                <p className="text-xl text-gray-300">{song.item.artists.map(a => a.name).join(", ")}</p>
+                <p className="text-gray-400 text-sm">{song.item.album.name}</p>
+
+                {/* Progress Bar */}
+                <div className="pt-4 space-y-2">
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>{formatMsToMinutes(song.progress_ms)}</span>
+                    <span className="text-green-400 font-medium">● LIVE</span>
+                  </div>
+                  <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500 ease-linear"
+                      style={{
+                        width: `${(song.progress_ms / song.item.duration_ms) * 100}%`,
+                        background: `linear-gradient(to right, ${dominantColor}, ${accentColor})`
+                      }}
+                    ></div>
                   </div>
                 </div>
               </div>
