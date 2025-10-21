@@ -6,7 +6,9 @@ import SpotifyProvider from "next-auth/providers/spotify";
 // The scope we need to read the currently playing song
 const scopes = [
   "user-read-email",
-  "user-read-currently-playing" // This is the important one!
+  "user-read-currently-playing",
+  "user-read-recently-played",
+  "user-modify-playback-state"
 ].join(",");
 
 const handler = NextAuth({

@@ -2,7 +2,7 @@
 
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
-import { Music, RefreshCw, LogOut, Play } from "lucide-react";
+import { Music, RefreshCw, LogOut, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 
 // ----- Types for Spotify API -----
 type SpotifyArtist = { name: string };
@@ -18,10 +18,14 @@ type SpotifyCurrentlyPlaying = {
   progress_ms: number;
   item: SpotifyTrack | null;
 };
+type SpotifyRecentlyPlayed = {
+  items: { track: SpotifyTrack; played_at: string }[];
+};
 
 export default function Home() {
   const { data: session } = useSession();
   const [song, setSong] = useState<SpotifyCurrentlyPlaying | null>(null);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<SpotifyRecentlyPlayed | null>(null);
   const [loading, setLoading] = useState(false);
   const [dominantColor, setDominantColor] = useState('#8b5cf6');
   const [accentColor, setAccentColor] = useState('#ec4899');
@@ -102,6 +106,72 @@ export default function Home() {
     }
   };
 
+  // ----- Fetch recently played tracks -----
+  const getRecentlyPlayed = async () => {
+    if (!session?.accessToken) return;
+
+    try {
+      const res = await fetch("https://api.spotify.com/v1/me/player/recently-played?limit=5", {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+
+      if (!res.ok) {
+        console.error("Failed to fetch recently played tracks");
+        setRecentlyPlayed(null);
+        return;
+      }
+
+      const data: SpotifyRecentlyPlayed = await res.json();
+      setRecentlyPlayed(data);
+    } catch (error) {
+      console.error(error);
+      setRecentlyPlayed(null);
+    }
+  };
+
+  // ----- Playback control functions -----
+  const togglePlayPause = async () => {
+    if (!session?.accessToken) return;
+
+    try {
+      await fetch("https://api.spotify.com/v1/me/player/" + (song?.is_playing ? "pause" : "play"), {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      getCurrentlyPlaying();
+    } catch (error) {
+      console.error("Failed to toggle play/pause", error);
+    }
+  };
+
+  const skipToNext = async () => {
+    if (!session?.accessToken) return;
+
+    try {
+      await fetch("https://api.spotify.com/v1/me/player/next", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      setTimeout(getCurrentlyPlaying, 1000); // Delay to allow Spotify to update
+    } catch (error) {
+      console.error("Failed to skip to next track", error);
+    }
+  };
+
+  const skipToPrevious = async () => {
+    if (!session?.accessToken) return;
+
+    try {
+      await fetch("https://api.spotify.com/v1/me/player/previous", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      setTimeout(getCurrentlyPlaying, 1000); // Delay to allow Spotify to update
+    } catch (error) {
+      console.error("Failed to skip to previous track", error);
+    }
+  };
+
   // ----- Update song progress every second -----
   useEffect(() => {
     if (!song?.is_playing) return;
@@ -113,10 +183,14 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [song]);
 
-  // ----- Auto-refresh every 15s for new songs -----
+  // ----- Auto-refresh every 15s for new songs and recently played -----
   useEffect(() => {
     getCurrentlyPlaying();
-    const interval = setInterval(getCurrentlyPlaying, 15000);
+    getRecentlyPlayed();
+    const interval = setInterval(() => {
+      getCurrentlyPlaying();
+      getRecentlyPlayed();
+    }, 15000);
     return () => clearInterval(interval);
   }, [session]);
 
@@ -209,6 +283,31 @@ export default function Home() {
                 <p className="text-xl text-gray-300">{song.item.artists.map(a => a.name).join(", ")}</p>
                 <p className="text-gray-400 text-sm">{song.item.album.name}</p>
 
+                {/* Playback Controls */}
+                <div className="flex justify-center md:justify-start gap-4 pt-4">
+                  <button
+                    onClick={skipToPrevious}
+                    className="p-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 text-white transition-all duration-300"
+                    title="Previous Track"
+                  >
+                    <SkipBack className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={togglePlayPause}
+                    className="p-2 rounded-full bg-green-500/50 hover:bg-green-500/70 text-white transition-all duration-300"
+                    title={song.is_playing ? "Pause" : "Play"}
+                  >
+                    {song.is_playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+                  </button>
+                  <button
+                    onClick={skipToNext}
+                    className="p-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 text-white transition-all duration-300"
+                    title="Next Track"
+                  >
+                    <SkipForward className="w-6 h-6" />
+                  </button>
+                </div>
+
                 {/* Progress Bar */}
                 <div className="pt-4 space-y-2">
                   <div className="flex justify-between text-sm text-gray-400">
@@ -235,6 +334,36 @@ export default function Home() {
               <p className="text-gray-400 text-lg">No song is currently playing</p>
               <p className="text-gray-500 text-sm">Start playing music on Spotify to see it here</p>
             </div>
+          )}
+        </div>
+
+        {/* Recently Played Tracks */}
+        <div className="bg-black/40 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
+          <h2 className="text-2xl font-bold text-white mb-6">Recently Played</h2>
+          {recentlyPlayed?.items?.length ? (
+            <div className="space-y-4">
+              {recentlyPlayed.items.map(({ track, played_at }, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-4 p-4 bg-gray-800/30 rounded-lg hover:bg-gray-800/50 transition-all duration-300"
+                >
+                  <img
+                    src={track.album.images[2]?.url}
+                    alt={track.album.name}
+                    className="w-12 h-12 rounded-lg object-cover"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-medium">{track.name}</p>
+                    <p className="text-sm text-gray-400">{track.artists.map(a => a.name).join(", ")}</p>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {new Date(played_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-center">No recently played tracks found</p>
           )}
         </div>
       </div>
