@@ -3,6 +3,9 @@
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Music, RefreshCw, LogOut, Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import DownloadStoryButton from '@/app/exportdemo/page';
+import Login from './login/login';
+
 
 // ----- Types for Spotify API -----
 type SpotifyArtist = { name: string };
@@ -111,7 +114,7 @@ export default function Home() {
     if (!session?.accessToken) return;
 
     try {
-      const res = await fetch("https://api.spotify.com/v1/me/player/recently-played?limit=5", {
+      const res = await fetch("https://api.spotify.com/v1/me/player/recently-played?limit=10", {
         headers: { Authorization: `Bearer ${session.accessToken}` },
       });
 
@@ -202,21 +205,7 @@ export default function Home() {
 
   // ----- Login Screen -----
   if (!session) {
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-900 via-black to-green-900">
-        <Music className="w-16 h-16 text-green-400 mx-auto" />
-        <h1 className="text-5xl md:text-6xl font-bold text-white mt-4">Spotify Predictor</h1>
-        <p className="text-gray-300 text-lg mt-2 max-w-md text-center">
-          Connect your Spotify account to see what you're listening to in real-time
-        </p>
-        <button
-          onClick={() => signIn("spotify")}
-          className="mt-6 bg-green-500 hover:bg-green-600 text-white font-semibold px-8 py-4 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
-        >
-          Login with Spotify
-        </button>
-      </main>
-    );
+    return <Login />;
   }
 
   // ----- Logged-in Screen -----
@@ -242,9 +231,9 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Now Playing */}
+{/* Now Playing */}
         <div
-          className="bg-gradient-to-br backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl transition-all duration-1000"
+          className="backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl transition-all duration-1000"
           style={{ background: `linear-gradient(135deg, ${dominantColor}, ${accentColor})` }}
         >
           <div className="flex items-center justify-between mb-6">
@@ -263,67 +252,83 @@ export default function Home() {
           </div>
 
           {song?.is_playing && song.item ? (
-            <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-              {/* Album Art */}
-              <div className="relative group">
-                <div
-                  className="absolute inset-0 rounded-2xl blur-xl opacity-50 transition-all duration-1000"
-                  style={{ background: `linear-gradient(135deg, ${dominantColor}, ${accentColor})` }}
-                ></div>
-                <img
-                  src={song.item.album.images[0]?.url}
-                  alt={song.item.album.name}
-                  className="relative w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-2xl object-cover"
-                />
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+                {/* Album Art */}
+                <div className="relative group flex-shrink-0">
+                  <div
+                    className="absolute inset-0 rounded-2xl blur-xl opacity-50 transition-all duration-1000"
+                    style={{ background: `linear-gradient(135deg, ${dominantColor}, ${accentColor})` }}
+                  ></div>
+                  <img
+                    src={song.item.album.images[0]?.url}
+                    alt={song.item.album.name}
+                    className="relative w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-2xl object-cover"
+                  />
+                </div>
+
+                {/* Track Info */}
+                <div className="flex-1 text-center md:text-left space-y-3 min-w-0">
+                  <h3 className="text-3xl md:text-4xl font-bold text-white leading-tight break-words">
+                    {song.item.name}
+                  </h3>
+                  <p className="text-xl text-gray-300">
+                    {song.item.artists.map(a => a.name).join(", ")}
+                  </p>
+                  <p className="text-gray-400 text-sm">{song.item.album.name}</p>
+
+                  {/* Playback Controls */}
+                  <div className="flex justify-center md:justify-start gap-4 pt-4">
+                    <button
+                      onClick={skipToPrevious}
+                      className="p-3 rounded-full bg-gray-800/50 hover:bg-gray-700/50 text-white transition-all duration-300 hover:scale-110"
+                      title="Previous Track"
+                    >
+                      <SkipBack className="w-6 h-6" />
+                    </button>
+                    <button
+                      onClick={togglePlayPause}
+                      className="p-3 rounded-full bg-green-500/50 hover:bg-green-500/70 text-white transition-all duration-300 hover:scale-110"
+                      title={song.is_playing ? "Pause" : "Play"}
+                    >
+                      {song.is_playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+                    </button>
+                    <button
+                      onClick={skipToNext}
+                      className="p-3 rounded-full bg-gray-800/50 hover:bg-gray-700/50 text-white transition-all duration-300 hover:scale-110"
+                      title="Next Track"
+                    >
+                      <SkipForward className="w-6 h-6" />
+                    </button>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="pt-4 space-y-2">
+                    <div className="flex justify-between text-sm text-gray-400">
+                      <span>{formatMsToMinutes(song.progress_ms)}</span>
+                      <span className="text-green-400 font-medium">● LIVE</span>
+                      <span>{formatMsToMinutes(song.item.duration_ms)}</span>
+                    </div>
+                    <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500 ease-linear"
+                        style={{
+                          width: `${(song.progress_ms / song.item.duration_ms) * 100}%`,
+                          background: `linear-gradient(to right, ${dominantColor}, ${accentColor})`
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Track Info */}
-              <div className="flex-1 text-center md:text-left space-y-3">
-                <h3 className="text-3xl md:text-4xl font-bold text-white leading-tight">{song.item.name}</h3>
-                <p className="text-xl text-gray-300">{song.item.artists.map(a => a.name).join(", ")}</p>
-                <p className="text-gray-400 text-sm">{song.item.album.name}</p>
-
-                {/* Playback Controls */}
-                <div className="flex justify-center md:justify-start gap-4 pt-4">
-                  <button
-                    onClick={skipToPrevious}
-                    className="p-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 text-white transition-all duration-300"
-                    title="Previous Track"
-                  >
-                    <SkipBack className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={togglePlayPause}
-                    className="p-2 rounded-full bg-green-500/50 hover:bg-green-500/70 text-white transition-all duration-300"
-                    title={song.is_playing ? "Pause" : "Play"}
-                  >
-                    {song.is_playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-                  </button>
-                  <button
-                    onClick={skipToNext}
-                    className="p-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 text-white transition-all duration-300"
-                    title="Next Track"
-                  >
-                    <SkipForward className="w-6 h-6" />
-                  </button>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="pt-4 space-y-2">
-                  <div className="flex justify-between text-sm text-gray-400">
-                    <span>{formatMsToMinutes(song.progress_ms)}</span>
-                    <span className="text-green-400 font-medium">● LIVE</span>
-                  </div>
-                  <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500 ease-linear"
-                      style={{
-                        width: `${(song.progress_ms / song.item.duration_ms) * 100}%`,
-                        background: `linear-gradient(to right, ${dominantColor}, ${accentColor})`
-                      }}
-                    ></div>
-                  </div>
-                </div>
+              {/* Download Button - Properly positioned below content */}
+              <div className="flex justify-center md:justify-end pt-4 border-t border-white/10">
+                <DownloadStoryButton 
+                  song={song} 
+                  dominantColor={dominantColor} 
+                  accentColor={accentColor} 
+                />
               </div>
             </div>
           ) : (
