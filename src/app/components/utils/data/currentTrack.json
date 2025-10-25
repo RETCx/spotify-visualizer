@@ -1,0 +1,20 @@
+{
+  "ts": "2025-10-24T10:28:23.307Z",
+  "platform": "unknown",
+  "ms_played": 27205,
+  "conn_country": "TH",
+  "ip_addr": "171.99.160.215",
+  "master_metadata_track_name": "right here",
+  "master_metadata_album_artist_name": "keshi",
+  "master_metadata_album_album_name": "bandaids",
+  "spotify_track_uri": "spotify:track:2Q3QRjA8MjzqpFaIkFludb",
+  "episode_name": null,
+  "episode_show_name": null,
+  "spotify_episode_uri": null,
+  "reason_start": "trackdone",
+  "reason_end": "trackdone",
+  "skipped": false,
+  "offline": false,
+  "offline_timestamp": 1730059784,
+  "incognito_mode": false
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { signIn } from "next-auth/react"
 import { Music } from "lucide-react";
 
 interface LoginPageProps {
